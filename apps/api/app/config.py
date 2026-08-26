@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3:4b"
     ollama_timeout_seconds: float = 120
     cors_origins: str = "http://localhost:3000"
+    jwt_secret: str = "tokomate-local-demo-secret-change-before-production"
+    jwt_access_token_minutes: int = 480
+    demo_agent_email: str = "agent@tokomate.local"
+    demo_agent_password: str = "DemoAgent123!"
+    demo_admin_email: str = "admin@tokomate.local"
+    demo_admin_password: str = "DemoAdmin123!"
 
     @property
     def cors_origin_list(self) -> list[str]:

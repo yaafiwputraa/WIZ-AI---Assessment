@@ -6,6 +6,8 @@ import time
 import httpx
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
+AGENT_EMAIL = os.getenv("DEMO_AGENT_EMAIL", "agent@tokomate.local")
+AGENT_PASSWORD = os.getenv("DEMO_AGENT_PASSWORD", "DemoAgent123!")
 SCENARIOS = [
     ("id", "Adidas Samba hitam size 42 masih ada?"),
     ("id", "ORD-192 saya sudah sampai mana?"),
@@ -15,6 +17,12 @@ SCENARIOS = [
 
 def main() -> None:
     with httpx.Client(base_url=API_URL, timeout=180) as client:
+        login = client.post(
+            "/api/auth/login",
+            json={"email": AGENT_EMAIL, "password": AGENT_PASSWORD},
+        )
+        login.raise_for_status()
+        staff_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
         for index, (locale, message) in enumerate(SCENARIOS, start=1):
             response = client.post(
                 "/api/chat",
@@ -29,7 +37,9 @@ def main() -> None:
             if payload.get("escalation"):
                 escalation_id = payload["escalation"]["id"]
                 for _ in range(20):
-                    detail = client.get(f"/api/escalations/{escalation_id}").json()
+                    detail = client.get(
+                        f"/api/escalations/{escalation_id}", headers=staff_headers
+                    ).json()
                     if detail["escalation"]["summary_status"] != "pending":
                         print(f"  summary={detail['escalation']['summary_status']}")
                         break

@@ -1,22 +1,26 @@
 "use client";
 
-import { Bot, Headphones, MessagesSquare } from "lucide-react";
+import { Bot, Headphones, LogOut, MessagesSquare, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { LanguageToggle } from "@/components/language-toggle";
-import type { Locale } from "@/types";
+import type { Locale, StaffUser } from "@/types";
 
 export function AppHeader({
   locale,
   onLocaleChange,
   chatLabel,
   dashboardLabel,
+  staffUser,
+  onLogout,
 }: {
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
   chatLabel: string;
   dashboardLabel: string;
+  staffUser?: StaffUser;
+  onLogout?: () => void;
 }) {
   const pathname = usePathname();
   return (
@@ -49,9 +53,27 @@ export function AppHeader({
             <Headphones size={15} /> {dashboardLabel}
           </Link>
         </nav>
+        {staffUser && (
+          <div className="hidden items-center gap-2 rounded-full border border-black/5 bg-white px-3 py-2 md:flex">
+            <ShieldCheck size={15} className="text-emerald" />
+            <span className="text-xs font-bold text-ink">{staffUser.full_name}</span>
+            <span className="rounded-full bg-mist px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald">
+              {staffUser.role}
+            </span>
+          </div>
+        )}
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="grid h-10 w-10 place-items-center rounded-full border border-black/5 bg-white text-sage transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+            aria-label="Log out"
+          >
+            <LogOut size={16} />
+          </button>
+        )}
         <LanguageToggle locale={locale} onChange={onLocaleChange} />
       </div>
     </header>
   );
 }
-

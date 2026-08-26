@@ -2,8 +2,10 @@ from datetime import date
 
 from sqlalchemy import select
 
+from .auth import hash_password, verify_password
+from .config import get_settings
 from .database import SessionLocal
-from .models import FAQ, Locale, Order, Product, ProductVariant
+from .models import FAQ, Locale, Order, Product, ProductVariant, StaffRole, StaffUser
 
 PRODUCTS = [
     {
@@ -92,6 +94,7 @@ FAQS = [
 
 
 def seed() -> None:
+    settings = get_settings()
     with SessionLocal() as db:
         for data in PRODUCTS:
             product = db.scalar(select(Product).where(Product.name == data["name"]))
@@ -141,6 +144,38 @@ def seed() -> None:
             else:
                 faq.answer = answer
                 faq.keywords = keywords
+
+        staff_accounts = [
+            (
+                settings.demo_agent_email,
+                "Demo Support Agent",
+                StaffRole.AGENT,
+                settings.demo_agent_password,
+            ),
+            (
+                settings.demo_admin_email,
+                "Demo Administrator",
+                StaffRole.ADMIN,
+                settings.demo_admin_password,
+            ),
+        ]
+        for email, full_name, role, password in staff_accounts:
+            user = db.scalar(select(StaffUser).where(StaffUser.email == email.lower()))
+            if user is None:
+                db.add(
+                    StaffUser(
+                        email=email.lower(),
+                        full_name=full_name,
+                        role=role,
+                        password_hash=hash_password(password),
+                    )
+                )
+            else:
+                user.full_name = full_name
+                user.role = role
+                user.is_active = True
+                if not verify_password(password, user.password_hash):
+                    user.password_hash = hash_password(password)
         db.commit()
 
 

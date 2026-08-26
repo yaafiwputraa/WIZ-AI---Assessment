@@ -6,8 +6,10 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AppHeader } from "@/components/app-header";
+import { StaffAccessLoading } from "@/components/staff-access-loading";
 import { PriorityBadge, StatusBadge } from "@/components/status-badge";
 import { useLocale } from "@/hooks/use-locale";
+import { useStaffAuth } from "@/hooks/use-staff-auth";
 import { getEscalation, takeOverEscalation } from "@/lib/api";
 import { formatDate, t } from "@/lib/i18n";
 import type { Conversation } from "@/types";
@@ -15,6 +17,7 @@ import type { Conversation } from "@/types";
 export default function ConversationDetailPage() {
   const params = useParams<{ id: string }>();
   const { locale, setLocale } = useLocale();
+  const { user, checking, logout } = useStaffAuth();
   const text = t(locale);
   const [conversation, setConversation] = useState<Conversation>();
   const [loading, setLoading] = useState(true);
@@ -22,6 +25,7 @@ export default function ConversationDetailPage() {
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
+    if (!user) return;
     try {
       setConversation(await getEscalation(params.id));
       setError(false);
@@ -30,13 +34,14 @@ export default function ConversationDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [params.id]);
+  }, [params.id, user]);
 
   useEffect(() => {
+    if (!user) return;
     load();
     const interval = window.setInterval(load, 3000);
     return () => window.clearInterval(interval);
-  }, [load]);
+  }, [load, user]);
 
   const takeover = async () => {
     if (!conversation?.escalation) return;
@@ -51,9 +56,18 @@ export default function ConversationDetailPage() {
 
   const escalation = conversation?.escalation;
 
+  if (checking || !user) return <StaffAccessLoading message={text.checkingAccess} />;
+
   return (
     <main className="min-h-screen bg-[#f6f8f6] pb-16">
-      <AppHeader locale={locale} onLocaleChange={setLocale} chatLabel={text.chat} dashboardLabel={text.dashboard} />
+      <AppHeader
+        locale={locale}
+        onLocaleChange={setLocale}
+        chatLabel={text.chat}
+        dashboardLabel={text.dashboard}
+        staffUser={user}
+        onLogout={logout}
+      />
       <section className="mx-auto w-full max-w-7xl px-5 pt-5 md:px-8 md:pt-9">
         <Link href="/dashboard" className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-sage transition hover:text-emerald"><ArrowLeft size={16} />{text.back}</Link>
         {error && <div className="rounded-2xl bg-red-50 p-4 font-semibold text-red-700">{text.loadError}</div>}
@@ -123,4 +137,3 @@ function InfoRow({ icon: Icon, label, value }: { icon: typeof Package; label: st
 function DetailSkeleton() {
   return <div className="mt-8 grid gap-6 lg:grid-cols-3">{[0, 1, 2].map((item) => <div key={item} className="h-64 animate-pulse rounded-[1.75rem] bg-white shadow-sm" />)}</div>;
 }
-

@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     Date,
     DateTime,
     Enum,
@@ -55,6 +56,11 @@ class SummaryStatus(str, enum.Enum):
     PENDING = "pending"
     READY = "ready"
     FAILED = "failed"
+
+
+class StaffRole(str, enum.Enum):
+    AGENT = "agent"
+    ADMIN = "admin"
 
 
 def enum_column(enum_type: type[enum.Enum], default: enum.Enum | None = None) -> Mapped[Any]:
@@ -171,3 +177,17 @@ class Escalation(Base):
     )
     taken_over_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     conversation: Mapped[Conversation] = relationship(back_populates="escalation")
+
+
+class StaffUser(Base):
+    __tablename__ = "staff_users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[StaffRole] = enum_column(StaffRole, StaffRole.AGENT)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

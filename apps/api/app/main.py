@@ -9,8 +9,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session, selectinload
 
+from .auth import authenticate_staff, create_access_token, get_current_staff, require_roles
 from .config import get_settings
 from .database import SessionLocal, get_db
+from .errors import APIError
 from .escalation import detect_escalation, extract_order_id
 from .models import (
     Conversation,
@@ -20,6 +22,8 @@ from .models import (
     Priority,
     Product,
     Sender,
+    StaffRole,
+    StaffUser,
     SummaryStatus,
 )
 from .ollama_service import OllamaService, OllamaUnavailable
@@ -47,16 +51,10 @@ from .schemas import (
     MessageOut,
     OrderOut,
     ProductOut,
+    StaffLoginRequest,
+    StaffLoginResponse,
+    StaffUserOut,
 )
-
-
-class APIError(Exception):
-    def __init__(self, status_code: int, code: str, message: str, retryable: bool = False):
-        self.status_code = status_code
-        self.code = code
-        self.message = message
-        self.retryable = retryable
-
 
 settings = get_settings()
 app = FastAPI(
@@ -69,7 +67,7 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 app.state.llm = OllamaService(settings)
 app.state.session_factory = SessionLocal
@@ -101,6 +99,28 @@ def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONRes
 
 def get_llm(request: Request) -> OllamaService:
     return request.app.state.llm
+
+
+@app.post(
+    "/api/auth/login",
+    response_model=StaffLoginResponse,
+    responses={401: {"model": ErrorResponse}},
+)
+def staff_login(payload: StaffLoginRequest, db: Session = Depends(get_db)) -> StaffLoginResponse:
+    user = authenticate_staff(db, payload.email, payload.password)
+    if user is None:
+        raise APIError(401, "invalid_credentials", "Email or password is incorrect.")
+    token, expires_in = create_access_token(user)
+    return StaffLoginResponse(
+        access_token=token,
+        expires_in=expires_in,
+        user=StaffUserOut.model_validate(user),
+    )
+
+
+@app.get("/api/auth/me", response_model=StaffUserOut)
+def staff_me(user: StaffUser = Depends(get_current_staff)) -> StaffUser:
+    return user
 
 
 def _acknowledgement(locale: Any) -> str:
@@ -292,7 +312,10 @@ def resolve_conversation(
 
 
 @app.get("/api/dashboard/stats", response_model=DashboardStats)
-def stats(db: Session = Depends(get_db)) -> DashboardStats:
+def stats(
+    db: Session = Depends(get_db),
+    _: StaffUser = Depends(require_roles(StaffRole.AGENT, StaffRole.ADMIN)),
+) -> DashboardStats:
     return DashboardStats(**dashboard_stats(db))
 
 
@@ -302,6 +325,7 @@ def escalations(
     priority: Priority | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
+    _: StaffUser = Depends(require_roles(StaffRole.AGENT, StaffRole.ADMIN)),
 ) -> list[EscalationListItem]:
     return [
         EscalationListItem(
@@ -321,7 +345,11 @@ def escalations(
 
 
 @app.get("/api/escalations/{escalation_id}", response_model=ConversationOut)
-def escalation_detail(escalation_id: uuid.UUID, db: Session = Depends(get_db)) -> ConversationOut:
+def escalation_detail(
+    escalation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: StaffUser = Depends(require_roles(StaffRole.AGENT, StaffRole.ADMIN)),
+) -> ConversationOut:
     escalation = get_escalation(db, escalation_id)
     if escalation is None:
         raise APIError(404, "escalation_not_found", "Escalation not found")
@@ -329,7 +357,11 @@ def escalation_detail(escalation_id: uuid.UUID, db: Session = Depends(get_db)) -
 
 
 @app.post("/api/escalations/{escalation_id}/takeover", response_model=EscalationOut)
-def escalation_takeover(escalation_id: uuid.UUID, db: Session = Depends(get_db)) -> EscalationOut:
+def escalation_takeover(
+    escalation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: StaffUser = Depends(require_roles(StaffRole.AGENT, StaffRole.ADMIN)),
+) -> EscalationOut:
     escalation = get_escalation(db, escalation_id)
     if escalation is None:
         raise APIError(404, "escalation_not_found", "Escalation not found")
@@ -344,7 +376,11 @@ def products(db: Session = Depends(get_db)) -> list[Product]:
 
 
 @app.get("/api/orders/{order_id}", response_model=OrderOut)
-def order_detail(order_id: str, db: Session = Depends(get_db)) -> Any:
+def order_detail(
+    order_id: str,
+    db: Session = Depends(get_db),
+    _: StaffUser = Depends(require_roles(StaffRole.ADMIN)),
+) -> Any:
     order = get_order(db, order_id)
     if order is None:
         raise APIError(404, "order_not_found", "Order not found")

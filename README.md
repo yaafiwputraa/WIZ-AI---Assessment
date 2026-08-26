@@ -6,6 +6,7 @@ The MVP includes:
 
 - A responsive customer chat at `/chat`.
 - An agent dashboard at `/dashboard`.
+- JWT staff authentication with server-enforced `agent` and `admin` roles.
 - Product search, stock, price, order, FAQ, and escalation tools.
 - Deterministic safety rules for complaints, refunds, damaged products, and human requests.
 - Local PostgreSQL persistence and Alembic migrations, with an optional Supabase override.
@@ -20,6 +21,24 @@ Next.js web (:3000) → FastAPI (:8000) → PostgreSQL (:5432)
 ```
 
 The API owns all database credentials and tool execution. The model never receives a database connection and cannot directly change arbitrary records.
+
+## Access model
+
+Customer chat remains public for the demo. Staff must sign in at `/login`; hiding dashboard links in the UI is not treated as security because FastAPI verifies the JWT and role again for every protected request.
+
+| Capability | Public customer | Agent | Admin |
+| --- | --- | --- | --- |
+| Chat and resolve a conversation | Yes | Yes | Yes |
+| View dashboard and escalations | No | Yes | Yes |
+| Take over an escalation | No | Yes | Yes |
+| Use the direct order diagnostic API | No | No | Yes |
+
+Seeded local accounts:
+
+- Agent: `agent@tokomate.local` / `DemoAgent123!`
+- Admin: `admin@tokomate.local` / `DemoAdmin123!`
+
+The credentials and JWT secret are configurable through `.env` and are intended only for the local assessment demo.
 
 ## Prerequisites
 
@@ -49,6 +68,7 @@ docker compose up --build
 Docker Compose starts PostgreSQL, waits until it is healthy, then the API automatically applies migrations and idempotently seeds the demo data. Open:
 
 - Customer chat: <http://localhost:3000/chat>
+- Staff login: <http://localhost:3000/login>
 - Agent dashboard: <http://localhost:3000/dashboard>
 - API documentation: <http://localhost:8000/docs>
 - Service health: <http://localhost:8000/api/health>
@@ -143,5 +163,7 @@ The Playwright UI test stubs the API boundary; backend acceptance tests separate
 - Product, stock, price, order, and policy facts must come from backend tools.
 - Refund eligibility is never decided by the AI.
 - Chat closes after escalation, takeover, or customer-confirmed resolution.
-- The unauthenticated dashboard is for seeded demo data only.
-- Agent replies, public deployment, omnichannel integrations, production authentication, and vector RAG are outside this MVP.
+- Dashboard and escalation endpoints require an authenticated `agent` or `admin` role.
+- The direct order diagnostic endpoint is restricted to `admin`; customer order questions still go through the controlled AI tool.
+- Demo JWTs are stored in browser local storage. Production SSO, HTTP-only session cookies, refresh-token rotation, and account administration remain outside this MVP.
+- Agent replies, public deployment, omnichannel integrations, and vector RAG are outside this MVP.

@@ -4,6 +4,21 @@ export type Priority = "low" | "medium" | "high";
 export type EscalationStatus = "open" | "taken_over";
 export type SummaryStatus = "pending" | "ready" | "failed";
 export type Sender = "customer" | "assistant" | "agent" | "system";
+export type StaffRole = "agent" | "admin";
+
+export interface StaffUser {
+  id: string;
+  email: string;
+  full_name: string;
+  role: StaffRole;
+}
+
+export interface StaffLoginResponse {
+  access_token: string;
+  token_type: "bearer";
+  expires_in: number;
+  user: StaffUser;
+}
 
 export interface Message {
   id: string;
@@ -66,4 +81,3 @@ export interface EscalationListItem {
   summary_status: SummaryStatus;
   created_at: string;
 }
-

@@ -24,6 +24,12 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-120}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-tokomate-local-demo-secret-change-before-production}
+      JWT_ACCESS_TOKEN_MINUTES: ${JWT_ACCESS_TOKEN_MINUTES:-480}
+      DEMO_AGENT_EMAIL: ${DEMO_AGENT_EMAIL:-agent@tokomate.local}
+      DEMO_AGENT_PASSWORD: ${DEMO_AGENT_PASSWORD:-DemoAgent123!}
+      DEMO_ADMIN_EMAIL: ${DEMO_ADMIN_EMAIL:-admin@tokomate.local}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-DemoAdmin123!}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

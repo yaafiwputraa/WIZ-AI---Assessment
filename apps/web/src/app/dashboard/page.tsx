@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AppHeader } from "@/components/app-header";
+import { StaffAccessLoading } from "@/components/staff-access-loading";
 import { PriorityBadge, StatusBadge, SummaryBadge } from "@/components/status-badge";
 import { useLocale } from "@/hooks/use-locale";
+import { useStaffAuth } from "@/hooks/use-staff-auth";
 import { getDashboardStats, getEscalations } from "@/lib/api";
 import { formatDate, t } from "@/lib/i18n";
 import type {
@@ -21,6 +23,7 @@ const priorityRank: Record<Priority, number> = { high: 3, medium: 2, low: 1 };
 
 export default function DashboardPage() {
   const { locale, setLocale } = useLocale();
+  const { user, checking, logout } = useStaffAuth();
   const text = t(locale);
   const [stats, setStats] = useState(emptyStats);
   const [tickets, setTickets] = useState<EscalationListItem[]>([]);
@@ -31,6 +34,7 @@ export default function DashboardPage() {
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
+    if (!user) return;
     try {
       const [nextStats, nextTickets] = await Promise.all([
         getDashboardStats(),
@@ -44,13 +48,14 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [priority, status]);
+  }, [priority, status, user]);
 
   useEffect(() => {
+    if (!user) return;
     load();
     const interval = window.setInterval(load, 3000);
     return () => window.clearInterval(interval);
-  }, [load]);
+  }, [load, user]);
 
   const sorted = useMemo(
     () =>
@@ -68,6 +73,8 @@ export default function DashboardPage() {
     { label: text.statsEscalated, value: stats.escalated, icon: Headphones, tone: "bg-amber-50 text-amber-700" },
   ];
 
+  if (checking || !user) return <StaffAccessLoading message={text.checkingAccess} />;
+
   return (
     <main className="min-h-screen bg-[#f6f8f6] pb-16">
       <AppHeader
@@ -75,6 +82,8 @@ export default function DashboardPage() {
         onLocaleChange={setLocale}
         chatLabel={text.chat}
         dashboardLabel={text.dashboard}
+        staffUser={user}
+        onLogout={logout}
       />
       <section className="mx-auto w-full max-w-7xl px-5 pt-6 md:px-8 md:pt-10">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -148,4 +157,3 @@ export default function DashboardPage() {
 function CheckCircleIcon() {
   return <span className="text-2xl">✓</span>;
 }
-

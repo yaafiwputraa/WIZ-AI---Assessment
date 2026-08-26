@@ -5,6 +5,18 @@ def new_chat(client, message, locale="id", name="Budi"):
     )
 
 
+def staff_headers(client, role="agent"):
+    response = client.post(
+        "/api/auth/login",
+        json={
+            "email": f"{role}@tokomate.local",
+            "password": "DemoAgent123!" if role == "agent" else "DemoAdmin123!",
+        },
+    )
+    assert response.status_code == 200
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
 def test_product_stock_scenario_records_tool_trace(client):
     response = new_chat(client, "Adidas Samba hitam size 42 masih ada?")
     assert response.status_code == 200
@@ -35,6 +47,7 @@ def test_english_product_scenario(client):
 
 
 def test_escalation_summary_dashboard_and_idempotent_takeover(client):
+    headers = staff_headers(client)
     response = new_chat(
         client,
         "Barang saya datang rusak dan saya sudah komplain dua kali. Saya mau refund.",
@@ -45,17 +58,20 @@ def test_escalation_summary_dashboard_and_idempotent_takeover(client):
     assert payload["conversation_status"] == "escalated"
     assert payload["escalation"]["priority"] == "high"
 
-    tickets = client.get("/api/escalations").json()
+    tickets = client.get("/api/escalations", headers=headers).json()
     assert tickets[0]["id"] == escalation_id
-    detail = client.get(f"/api/escalations/{escalation_id}").json()
+    detail = client.get(f"/api/escalations/{escalation_id}", headers=headers).json()
     assert detail["escalation"]["summary_status"] == "ready"
     assert "refund" in detail["escalation"]["summary"].lower()
 
-    first = client.post(f"/api/escalations/{escalation_id}/takeover")
-    second = client.post(f"/api/escalations/{escalation_id}/takeover")
+    first = client.post(f"/api/escalations/{escalation_id}/takeover", headers=headers)
+    second = client.post(f"/api/escalations/{escalation_id}/takeover", headers=headers)
     assert first.status_code == second.status_code == 200
     assert second.json()["status"] == "taken_over"
-    assert client.get(f"/api/escalations/{escalation_id}").json()["status"] == "human_active"
+    assert (
+        client.get(f"/api/escalations/{escalation_id}", headers=headers).json()["status"]
+        == "human_active"
+    )
 
 
 def test_resolve_and_reject_more_messages(client):
@@ -79,10 +95,11 @@ def test_unknown_fact_is_not_invented(client):
 
 
 def test_dashboard_stats(client):
+    headers = staff_headers(client)
     first = new_chat(client, "What payment methods are available?", locale="en").json()
     client.post(f"/api/conversations/{first['conversation_id']}/resolve")
     new_chat(client, "Barang saya datang rusak")
-    stats = client.get("/api/dashboard/stats").json()
+    stats = client.get("/api/dashboard/stats", headers=headers).json()
     assert stats == {"active_ai": 0, "ai_resolved": 1, "escalated": 1}
 
 
@@ -90,3 +107,45 @@ def test_new_conversation_requires_name(client):
     response = client.post("/api/chat", json={"locale": "id", "message": "Halo"})
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "customer_name_required"
+
+
+def test_dashboard_requires_staff_authentication(client):
+    response = client.get("/api/dashboard/stats")
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "authentication_required"
+
+
+def test_agent_and_admin_roles_are_enforced(client):
+    agent_headers = staff_headers(client, "agent")
+    admin_headers = staff_headers(client, "admin")
+
+    assert client.get("/api/dashboard/stats", headers=agent_headers).status_code == 200
+    denied = client.get("/api/orders/ORD-192", headers=agent_headers)
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "insufficient_role"
+
+    allowed = client.get("/api/orders/ORD-192", headers=admin_headers)
+    assert allowed.status_code == 200
+    assert allowed.json()["tracking_number"] == "JNE123456"
+
+
+def test_invalid_staff_credentials_are_rejected(client):
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "agent@tokomate.local", "password": "wrong-password"},
+    )
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "invalid_credentials"
+
+
+def test_cors_allows_staff_authorization_header(client):
+    response = client.options(
+        "/api/dashboard/stats",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert response.status_code == 200
+    assert "authorization" in response.headers["access-control-allow-headers"].lower()

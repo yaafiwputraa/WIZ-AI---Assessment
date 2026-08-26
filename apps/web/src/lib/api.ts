@@ -7,7 +7,10 @@ import type {
   EscalationStatus,
   Locale,
   Priority,
+  StaffLoginResponse,
+  StaffUser,
 } from "@/types";
+import { clearAccessToken, getAccessToken } from "@/lib/auth-storage";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -22,12 +25,18 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAccessToken();
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401 && token) clearAccessToken();
     const detail = payload?.error;
     throw new ApiError(
       detail?.code ?? "request_failed",
@@ -36,6 +45,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     );
   }
   return payload as T;
+}
+
+export function loginStaff(email: string, password: string) {
+  return request<StaffLoginResponse>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function getCurrentStaff() {
+  return request<StaffUser>("/api/auth/me");
 }
 
 export function sendChat(input: {
@@ -76,4 +96,3 @@ export function getEscalation(id: string) {
 export function takeOverEscalation(id: string) {
   return request<Escalation>(`/api/escalations/${id}/takeover`, { method: "POST" });
 }
-

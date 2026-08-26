@@ -9,11 +9,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.auth import hash_password
 from app.database import Base, get_db
 from app.main import app
-from app.models import FAQ, Locale, Order, Product, ProductVariant
+from app.models import FAQ, Locale, Order, Product, ProductVariant, StaffRole, StaffUser
 from app.ollama_service import AgentResult
 from app.tools import ToolExecutor
+
+AGENT_PASSWORD_HASH = hash_password("DemoAgent123!")
+ADMIN_PASSWORD_HASH = hash_password("DemoAdmin123!")
 
 
 class FakeLLM:
@@ -124,6 +128,22 @@ def client():
                     question="Payment methods?",
                     answer="Bank transfer, virtual account, QRIS, and cards.",
                     keywords=["payment", "qris"],
+                ),
+            ]
+        )
+        db.add_all(
+            [
+                StaffUser(
+                    email="agent@tokomate.local",
+                    full_name="Demo Support Agent",
+                    password_hash=AGENT_PASSWORD_HASH,
+                    role=StaffRole.AGENT,
+                ),
+                StaffUser(
+                    email="admin@tokomate.local",
+                    full_name="Demo Administrator",
+                    password_hash=ADMIN_PASSWORD_HASH,
+                    role=StaffRole.ADMIN,
                 ),
             ]
         )
