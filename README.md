@@ -1,71 +1,137 @@
 # TokoMate AI
 
-TokoMate AI is a bilingual (Bahasa Indonesia/English) customer-support prototype for Indonesian SMEs. It answers routine questions from structured business data and hands sensitive cases to a human agent with an AI-generated summary.
+**Reliable bilingual AI customer support for Indonesian SMEs.**
 
-The MVP includes:
+TokoMate AI answers routine product, stock, pricing, order, and policy questions using verified business data. Sensitive cases are escalated to a human support agent with a priority, full transcript, and AI-generated handoff summary.
 
-- A responsive customer chat at `/chat`.
-- An agent dashboard at `/dashboard`.
-- JWT staff authentication with server-enforced `agent` and `admin` roles.
-- Product search, stock, price, order, FAQ, and escalation tools.
-- Deterministic safety rules for complaints, refunds, damaged products, and human requests.
-- Local PostgreSQL persistence and Alembic migrations, with an optional Supabase override.
-- Local Ollama inference using `qwen3:4b`.
+This repository is a working prototype for the WIZ.AI AI Builder Challenge: **Option 1 — UMKM Customer Service**.
 
-## Architecture
+## The problem
 
-```text
-Next.js web (:3000) → FastAPI (:8000) → PostgreSQL (:5432)
-                              ↓
-                    Ollama on the host (:11434)
-```
+Indonesian SMEs often handle repetitive customer questions manually across messaging channels. Agents spend time checking stock, prices, delivery records, and store policies, while sensitive complaints can be missed or handled inconsistently.
 
-The API owns all database credentials and tool execution. The model never receives a database connection and cannot directly change arbitrary records.
+TokoMate AI addresses this with a hybrid approach:
 
-## Access model
+- AI understands natural Bahasa Indonesia and English.
+- Business facts come from validated tools and database records, not model guesses.
+- Deterministic rules escalate refunds, damaged products, payment disputes, missing orders, delays, repeated complaints, and requests for a human.
+- Human agents receive the customer context without asking them to repeat the issue.
 
-Customer chat remains public for the demo. Staff must sign in at `/login`; hiding dashboard links in the UI is not treated as security because FastAPI verifies the JWT and role again for every protected request.
+## What the prototype demonstrates
 
-| Capability | Public customer | Agent | Admin |
-| --- | --- | --- | --- |
-| Chat and resolve a conversation | Yes | Yes | Yes |
-| View dashboard and escalations | No | Yes | Yes |
-| Take over an escalation | No | Yes | Yes |
-| Use the direct order diagnostic API | No | No | Yes |
+### Customer experience
+
+- Bilingual customer chat with an ID/EN language selector.
+- Product discovery, price, stock, order tracking, and store-policy assistance.
+- Explicit not-found responses when business information cannot be verified.
+- Localized escalation confirmation for sensitive cases.
+- Customer-controlled “Issue resolved” action.
+
+### Support operations
+
+- Live dashboard with active, AI-resolved, and escalated conversation metrics.
+- Priority and status filters with automatic polling.
+- Escalation detail containing the complete transcript and AI summary.
+- Transactional and idempotent human takeover.
+- JWT authentication with server-enforced `agent` and `admin` roles.
+
+### AI reliability
+
+- Six repository-backed business tools.
+- Typed tool arguments and structured results.
+- Maximum of four tool-call rounds using the latest 30 messages.
+- Persisted tool traces showing which source supplied each business fact.
+- Server-side escalation rules and minimum priority enforcement.
+- Failed summary generation is marked as failed instead of inventing content.
+
+## Business impact
+
+TokoMate AI is designed to:
+
+- Reduce repetitive customer-service workload.
+- Provide faster answers outside normal support hours.
+- Let agents focus on complaints and cases requiring judgment.
+- Reduce handling time by providing an immediate handoff summary.
+- Improve consistency by grounding operational answers in business records.
+
+**Illustrative scenario, not a measured production result:** for a seller receiving 500 conversations per day, if 60% are routine inquiries and each takes three minutes to handle manually, automation could redirect up to 15 agent-hours per day toward higher-value cases. Production impact should be validated through containment rate, response time, escalation accuracy, and agent handling time.
+
+## Demo scenarios
+
+Use a fresh conversation for each scenario.
+
+| Scenario | Customer message | Expected behavior |
+| --- | --- | --- |
+| Product availability | `Adidas Samba hitam size 42 masih ada?` | Calls the stock tool and returns stock `3` at `Rp1.499.000`. |
+| Order tracking | `ORD-192 saya sudah sampai mana?` | Calls the order tool and returns Shipped, JNE, `JNE123456`, and 26 August 2026. |
+| Human escalation | `Barang saya datang rusak dan saya sudah komplain dua kali. Saya mau refund.` | Creates a high-priority ticket, generates a summary, and sends it to the support dashboard. |
+
+Equivalent English prompts produce English responses. Unknown products, orders, or policies receive an explicit not-found response rather than invented business information.
+
+## System architecture
+
+![TokoMate AI system architecture](<assets/system architecture.png>)
+
+The backend owns authentication, conversation state, database access, business-tool execution, and AI coordination. The AI model never receives database credentials or unrestricted database access.
+
+## AI workflow
+
+![TokoMate AI customer support workflow](<assets/ai workflow.png>)
+
+The system checks deterministic escalation rules before normal AI processing. Routine requests use approved business tools to retrieve verified information. Sensitive requests create a ticket immediately and continue through a human-in-the-loop workflow.
+
+## Access control
+
+Customer chat is public for the local demo. Staff dashboard requests require a valid JWT, and every protected action is authorized again by the backend.
+
+| Role | Access |
+| --- | --- |
+| Public customer | Customer chat and conversation resolution |
+| Agent | Dashboard, escalation list and detail, human takeover |
+| Admin | All agent capabilities plus the direct order diagnostic API |
 
 Seeded local accounts:
 
 - Agent: `agent@tokomate.local` / `DemoAgent123!`
 - Admin: `admin@tokomate.local` / `DemoAdmin123!`
 
-The credentials and JWT secret are configurable through `.env` and are intended only for the local assessment demo.
+These credentials and the default JWT secret are intended only for the local assessment demo and can be replaced through environment variables.
 
-## Prerequisites
+## Technology stack
 
-- Docker Desktop with Docker Compose
-- Ollama 0.6+ running on the host
-- `qwen3:4b` installed locally
+| Layer | Implementation |
+| --- | --- |
+| Web application | Next.js, React, TypeScript, Tailwind CSS |
+| Backend | FastAPI, Python, Pydantic |
+| AI | Ollama with `qwen3:4b` and native tool calling |
+| Data | PostgreSQL, SQLAlchemy, Alembic |
+| Authentication | JWT, PBKDF2 password hashing, role-based authorization |
+| Testing | Pytest, Vitest, Testing Library, Playwright |
+| Local environment | Docker Compose |
+
+## Quick start
+
+### Prerequisites
+
+- Docker Desktop with Docker Compose.
+- Ollama 0.6 or newer running on the host.
+
+Install the model:
 
 ```powershell
 ollama pull qwen3:4b
 ollama list
 ```
 
-## Run with Docker
-
-1. Optionally copy the environment template if you want to customize ports or credentials:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-2. Start the stack:
+Start the complete application:
 
 ```powershell
 docker compose up --build
 ```
 
-Docker Compose starts PostgreSQL, waits until it is healthy, then the API automatically applies migrations and idempotently seeds the demo data. Open:
+Docker Compose starts PostgreSQL, waits until it is healthy, then automatically applies migrations and idempotently seeds the demo data.
+
+Open:
 
 - Customer chat: <http://localhost:3000/chat>
 - Staff login: <http://localhost:3000/login>
@@ -73,16 +139,36 @@ Docker Compose starts PostgreSQL, waits until it is healthy, then the API automa
 - API documentation: <http://localhost:8000/docs>
 - Service health: <http://localhost:8000/api/health>
 
-`OLLAMA_BASE_URL` defaults to `http://host.docker.internal:11434`, allowing the API container to use Ollama running on Windows.
+The API container connects to Ollama on the host through `host.docker.internal`. PostgreSQL data persists in the `postgres_data` Docker volume.
 
-PostgreSQL data is retained in the `postgres_data` Docker volume. A hosted database is not required for the local prototype.
+### Optional configuration
 
-## Run natively
+The application works with local demo defaults. To customize credentials, ports, the model, or the database connection, copy the environment template before startup:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+On macOS or Linux:
+
+```bash
+cp .env.example .env
+```
+
+The application uses standard PostgreSQL and does not depend on provider-specific features. A hosted PostgreSQL or Supabase session-pooler URL can be supplied through `DATABASE_URL` without application-code changes.
+
+<details>
+<summary>Run the web and API applications natively</summary>
+
+Start only PostgreSQL:
+
+```powershell
+docker compose up -d db
+```
 
 Backend:
 
 ```powershell
-docker compose up -d db
 Set-Location apps/api
 uv sync
 $env:DATABASE_URL = "postgresql+psycopg://tokomate:tokomate_dev@localhost:5432/tokomate"
@@ -101,37 +187,18 @@ $env:NEXT_PUBLIC_API_URL = "http://localhost:8000"
 npm run dev
 ```
 
-When `DATABASE_URL` is unset, native backend commands default to the local PostgreSQL container shown above.
-
-## Optional Supabase database
-
-The application uses standard PostgreSQL through SQLAlchemy and does not depend on Supabase-specific features. To use Supabase later, set `DATABASE_URL` in `.env` to its session-pooler PostgreSQL URL with `sslmode=require`. URL-encode special characters in the password. No application-code changes are required.
-
-## Demo scenarios
-
-Use a fresh chat for each scenario:
-
-1. `Adidas Samba hitam size 42 masih ada?`
-   - Calls `check_product_stock`.
-   - Returns 3 pairs at Rp1.499.000.
-2. `ORD-192 saya sudah sampai mana?`
-   - Calls `check_order_status`.
-   - Returns Shipped, JNE, JNE123456, and 26 August 2026.
-3. `Barang saya datang rusak dan saya sudah komplain dua kali. Saya mau refund.`
-   - Creates a high-priority escalation.
-   - Generates a summary in the background.
-   - Appears in the agent dashboard and can be taken over.
-
-Run the live API smoke script after starting the stack:
-
-```powershell
-Set-Location apps/api
-uv run python scripts/live_smoke.py
-```
+</details>
 
 ## Verification
 
-Backend:
+Latest local verification:
+
+- 19 backend tests passing.
+- 3 frontend unit tests passing.
+- 2 Playwright browser tests passing.
+- Ruff, ESLint, Docker Compose validation, and the Next.js production build passing.
+
+Backend checks:
 
 ```powershell
 Set-Location apps/api
@@ -139,31 +206,42 @@ uv run ruff check .
 uv run pytest
 ```
 
-Frontend:
+Frontend checks:
 
 ```powershell
 Set-Location apps/web
 npm run lint
 npm test
 npm run build
-```
-
-Playwright UI smoke test:
-
-```powershell
-Set-Location apps/web
 npx playwright install chromium
 npm run test:e2e
 ```
 
-The Playwright UI test stubs the API boundary; backend acceptance tests separately verify the database tools, escalation summary, dashboard data, resolve behavior, and idempotent takeover.
+Automated tests mock the AI or API boundary for deterministic results. To verify the three scenarios against the running model and application stack:
 
-## Safety and MVP boundaries
+```powershell
+Set-Location apps/api
+uv run python scripts/live_smoke.py
+```
 
-- Product, stock, price, order, and policy facts must come from backend tools.
-- Refund eligibility is never decided by the AI.
-- Chat closes after escalation, takeover, or customer-confirmed resolution.
-- Dashboard and escalation endpoints require an authenticated `agent` or `admin` role.
-- The direct order diagnostic endpoint is restricted to `admin`; customer order questions still go through the controlled AI tool.
-- Demo JWTs are stored in browser local storage. Production SSO, HTTP-only session cookies, refresh-token rotation, and account administration remain outside this MVP.
-- Agent replies, public deployment, omnichannel integrations, and vector RAG are outside this MVP.
+## Project structure
+
+```text
+.
+├── apps/
+│   ├── api/       FastAPI application, migrations, seed data, and tests
+│   └── web/       Customer chat, staff dashboard, and browser tests
+├── assets/        Architecture and workflow diagrams
+├── docker-compose.yml
+└── TokoMate_AI_PRD.md
+```
+
+## MVP boundaries and production evolution
+
+- The web chat represents the customer messaging channel. WhatsApp can be integrated by forwarding inbound webhooks into the same chat orchestration layer.
+- Human takeover changes ownership and disables AI input; agent-to-customer messaging is outside this prototype.
+- Demo JWTs are stored in browser local storage. Production should use SSO or HTTP-only sessions, refresh-token rotation, and account administration.
+- Customer order ownership is not verified in the demo. Production should verify the authenticated customer or an order-specific credential before returning delivery information.
+- AI summaries currently use an in-process background task. Production should use a durable job queue with monitoring and retries.
+- Ollama runs as a single local inference service. Production capacity requires managed inference or a scalable model-serving layer.
+- Public deployment, omnichannel delivery, analytics history, and vector retrieval remain outside the MVP.
