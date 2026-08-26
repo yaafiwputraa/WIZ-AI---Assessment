@@ -8,13 +8,13 @@ The MVP includes:
 - An agent dashboard at `/dashboard`.
 - Product search, stock, price, order, FAQ, and escalation tools.
 - Deterministic safety rules for complaints, refunds, damaged products, and human requests.
-- Supabase PostgreSQL persistence and Alembic migrations.
+- Local PostgreSQL persistence and Alembic migrations, with an optional Supabase override.
 - Local Ollama inference using `qwen3:4b`.
 
 ## Architecture
 
 ```text
-Next.js web (:3000) → FastAPI (:8000) → Supabase PostgreSQL
+Next.js web (:3000) → FastAPI (:8000) → PostgreSQL (:5432)
                               ↓
                     Ollama on the host (:11434)
 ```
@@ -24,7 +24,6 @@ The API owns all database credentials and tool execution. The model never receiv
 ## Prerequisites
 
 - Docker Desktop with Docker Compose
-- A Supabase project and PostgreSQL connection string
 - Ollama 0.6+ running on the host
 - `qwen3:4b` installed locally
 
@@ -35,21 +34,19 @@ ollama list
 
 ## Run with Docker
 
-1. Copy the environment template:
+1. Optionally copy the environment template if you want to customize ports or credentials:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-2. Set `DATABASE_URL` in `.env` to the Supabase session-pooler PostgreSQL URL. Keep `sslmode=require`. URL-encode special characters in the password.
-
-3. Start the stack:
+2. Start the stack:
 
 ```powershell
 docker compose up --build
 ```
 
-The API container automatically applies migrations and idempotently seeds the demo data before starting. Open:
+Docker Compose starts PostgreSQL, waits until it is healthy, then the API automatically applies migrations and idempotently seeds the demo data. Open:
 
 - Customer chat: <http://localhost:3000/chat>
 - Agent dashboard: <http://localhost:3000/dashboard>
@@ -58,14 +55,17 @@ The API container automatically applies migrations and idempotently seeds the de
 
 `OLLAMA_BASE_URL` defaults to `http://host.docker.internal:11434`, allowing the API container to use Ollama running on Windows.
 
+PostgreSQL data is retained in the `postgres_data` Docker volume. A hosted database is not required for the local prototype.
+
 ## Run natively
 
 Backend:
 
 ```powershell
+docker compose up -d db
 Set-Location apps/api
 uv sync
-$env:DATABASE_URL = "postgresql+psycopg://..."
+$env:DATABASE_URL = "postgresql+psycopg://tokomate:tokomate_dev@localhost:5432/tokomate"
 $env:OLLAMA_BASE_URL = "http://localhost:11434"
 uv run alembic upgrade head
 uv run python -m app.seed
@@ -81,7 +81,11 @@ $env:NEXT_PUBLIC_API_URL = "http://localhost:8000"
 npm run dev
 ```
 
-For quick backend-only development, the API defaults to a local `tokomate-dev.db` SQLite file when `DATABASE_URL` is unset. Docker deliberately requires the Supabase URL.
+When `DATABASE_URL` is unset, native backend commands default to the local PostgreSQL container shown above.
+
+## Optional Supabase database
+
+The application uses standard PostgreSQL through SQLAlchemy and does not depend on Supabase-specific features. To use Supabase later, set `DATABASE_URL` in `.env` to its session-pooler PostgreSQL URL with `sslmode=require`. URL-encode special characters in the password. No application-code changes are required.
 
 ## Demo scenarios
 

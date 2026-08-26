@@ -8,8 +8,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=(".env", "../../.env"), extra="ignore")
 
     database_url: str = Field(
-        default="sqlite:///./tokomate-dev.db",
-        description="Supabase PostgreSQL connection string",
+        default="postgresql+psycopg://tokomate:tokomate_dev@localhost:5432/tokomate",
+        description="SQLAlchemy PostgreSQL connection string",
     )
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
