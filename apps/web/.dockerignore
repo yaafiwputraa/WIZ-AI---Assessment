@@ -1,0 +1,6 @@
+.next
+node_modules
+node_modules.partial
+playwright-report
+test-results
+
