@@ -35,9 +35,47 @@ def test_order_tracking_scenario(client):
     response = new_chat(client, "ORD-192 saya sudah sampai mana?")
     assert response.status_code == 200
     payload = response.json()
-    content = payload["assistant_message"]["content"]
-    assert all(item in content for item in ["ORD-192", "JNE", "JNE123456"])
+    assert payload["order_verification_required"] is True
+    assert payload["order_verified"] is False
+    assert payload["order_id"] == "ORD-192"
+    assert "JNE123456" not in payload["assistant_message"]["content"]
     assert payload["tool_trace_identifiers"]
+
+    invalid = client.post(
+        "/api/chat",
+        json={
+            "conversation_id": payload["conversation_id"],
+            "locale": "id",
+            "message": "Saya sudah memasukkan kode verifikasi untuk ORD-192.",
+            "order_verification_code": "WRONG1",
+        },
+    )
+    assert invalid.status_code == 200
+    assert invalid.json()["order_verification_required"] is True
+    assert "JNE123456" not in invalid.json()["assistant_message"]["content"]
+
+    verified = client.post(
+        "/api/chat",
+        json={
+            "conversation_id": payload["conversation_id"],
+            "locale": "id",
+            "message": "Saya sudah memasukkan kode verifikasi untuk ORD-192.",
+            "order_verification_code": "TOKO192",
+        },
+    )
+    assert verified.status_code == 200
+    verified_payload = verified.json()
+    assert verified_payload["order_verification_required"] is False
+    assert verified_payload["order_verified"] is True
+    assert all(
+        item in verified_payload["assistant_message"]["content"]
+        for item in ["ORD-192", "JNE", "JNE123456"]
+    )
+
+    detail = client.get(f"/api/conversations/{payload['conversation_id']}").json()
+    assert detail["verified_order_id"] == "ORD-192"
+    assert "TOKO192" not in str(detail)
+    assert "WRONG1" not in str(detail)
 
 
 def test_english_product_scenario(client):

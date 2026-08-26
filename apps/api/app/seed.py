@@ -126,15 +126,20 @@ def seed() -> None:
 
         order = db.get(Order, "ORD-192")
         if order is None:
-            db.add(
-                Order(
-                    id="ORD-192",
-                    customer_name="Budi",
-                    status="Shipped",
-                    courier="JNE",
-                    tracking_number="JNE123456",
-                    estimated_delivery=date(2026, 8, 26),
-                )
+            order = Order(
+                id="ORD-192",
+                customer_name="Budi",
+                status="Shipped",
+                courier="JNE",
+                tracking_number="JNE123456",
+                estimated_delivery=date(2026, 8, 26),
+            )
+            db.add(order)
+        if not order.verification_code_hash or not verify_password(
+            settings.demo_order_verification_code, order.verification_code_hash
+        ):
+            order.verification_code_hash = hash_password(
+                settings.demo_order_verification_code
             )
 
         for locale, question, answer, keywords in FAQS:

@@ -63,6 +63,7 @@ export function sendChat(input: {
   customer_name?: string;
   locale: Locale;
   message: string;
+  order_verification_code?: string;
 }) {
   return request<ChatResponse>("/api/chat", { method: "POST", body: JSON.stringify(input) });
 }

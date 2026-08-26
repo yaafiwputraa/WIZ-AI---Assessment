@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     demo_agent_password: str = "DemoAgent123!"
     demo_admin_email: str = "admin@tokomate.local"
     demo_admin_password: str = "DemoAdmin123!"
+    demo_order_verification_code: str = "TOKO192"
 
     @property
     def cors_origin_list(self) -> list[str]:

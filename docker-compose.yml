@@ -30,6 +30,7 @@ services:
       DEMO_AGENT_PASSWORD: ${DEMO_AGENT_PASSWORD:-DemoAgent123!}
       DEMO_ADMIN_EMAIL: ${DEMO_ADMIN_EMAIL:-admin@tokomate.local}
       DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-DemoAdmin123!}
+      DEMO_ORDER_VERIFICATION_CODE: ${DEMO_ORDER_VERIFICATION_CODE:-TOKO192}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

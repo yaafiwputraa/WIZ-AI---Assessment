@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  KeyRound,
   PackageCheck,
   Send,
   ShieldCheck,
@@ -27,6 +28,9 @@ export default function ChatPage() {
   const [status, setStatus] = useState<ConversationStatus>("ai_active");
   const [escalation, setEscalation] = useState<Escalation | null>(null);
   const [input, setInput] = useState("");
+  const [verificationOrderId, setVerificationOrderId] = useState<string>();
+  const [verifiedOrderId, setVerifiedOrderId] = useState<string>();
+  const [verificationCode, setVerificationCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const endRef = useRef<HTMLDivElement>(null);
@@ -40,9 +44,7 @@ export default function ChatPage() {
     if (customerName.trim()) setStarted(true);
   };
 
-  const send = async (event: FormEvent) => {
-    event.preventDefault();
-    const content = input.trim();
+  const submitMessage = async (content: string, orderVerificationCode?: string) => {
     if (!content || loading || status !== "ai_active") return;
     setError(undefined);
     setInput("");
@@ -61,10 +63,19 @@ export default function ChatPage() {
         customer_name: conversationId ? undefined : customerName,
         locale,
         message: content,
+        order_verification_code: orderVerificationCode,
       });
       setConversationId(response.conversation_id);
       setStatus(response.conversation_status);
       setEscalation(response.escalation);
+      if (response.order_verification_required && response.order_id) {
+        setVerificationOrderId(response.order_id);
+        setVerifiedOrderId(undefined);
+      } else if (response.order_verified && response.order_id) {
+        setVerificationOrderId(undefined);
+        setVerifiedOrderId(response.order_id);
+        setVerificationCode("");
+      }
       setMessages((current) => [
         ...current.filter((message) => message.id !== tempId),
         response.user_message,
@@ -72,11 +83,32 @@ export default function ChatPage() {
       ]);
     } catch (caught) {
       setMessages((current) => current.filter((message) => message.id !== tempId));
-      setInput(content);
+      if (orderVerificationCode) setVerificationCode(orderVerificationCode);
+      else setInput(content);
       setError(caught instanceof ApiError ? caught.message : text.loadError);
     } finally {
       setLoading(false);
     }
+  };
+
+  const send = async (event: FormEvent) => {
+    event.preventDefault();
+    const content = input.trim();
+    if (!content) return;
+    setInput("");
+    await submitMessage(content);
+  };
+
+  const verifyOrder = async (event: FormEvent) => {
+    event.preventDefault();
+    const code = verificationCode.trim();
+    if (!code || !verificationOrderId) return;
+    setVerificationCode("");
+    const content =
+      locale === "id"
+        ? `Saya sudah memasukkan kode verifikasi untuk ${verificationOrderId}.`
+        : `I have provided the verification code for ${verificationOrderId}.`;
+    await submitMessage(content, code);
   };
 
   const resolve = async () => {
@@ -100,6 +132,9 @@ export default function ChatPage() {
     setEscalation(null);
     setCustomerName("");
     setInput("");
+    setVerificationOrderId(undefined);
+    setVerifiedOrderId(undefined);
+    setVerificationCode("");
     setError(undefined);
   };
 
@@ -204,6 +239,54 @@ export default function ChatPage() {
                     <div className="message-ai message-bubble flex items-center gap-3 text-sage">
                       <span className="typing"><i /><i /><i /></span>{text.thinking}
                     </div>
+                  </div>
+                )}
+                {verificationOrderId && status === "ai_active" && (
+                  <form
+                    onSubmit={verifyOrder}
+                    className="notice-card border-sky-200 bg-sky-50 text-sky-950"
+                  >
+                    <KeyRound size={22} className="mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-bold">{text.orderVerificationTitle}</h3>
+                      <p className="mt-1 text-sm opacity-75">
+                        {text.orderVerificationBody.replace("{orderId}", verificationOrderId)}
+                      </p>
+                      <label
+                        className="mt-4 block text-xs font-bold"
+                        htmlFor="order-verification-code"
+                      >
+                        {text.orderVerificationLabel}
+                      </label>
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                        <input
+                          id="order-verification-code"
+                          type="password"
+                          autoComplete="off"
+                          value={verificationCode}
+                          onChange={(event) => setVerificationCode(event.target.value)}
+                          minLength={4}
+                          maxLength={40}
+                          placeholder={text.orderVerificationPlaceholder}
+                          className="field min-w-0 flex-1"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!verificationCode.trim() || loading}
+                          className="primary-button shrink-0"
+                        >
+                          <KeyRound size={16} /> {text.verifyOrder}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
+                {verifiedOrderId && status === "ai_active" && (
+                  <div className="notice-card border-emerald/20 bg-mist text-ink">
+                    <CheckCircle2 size={22} className="text-emerald" />
+                    <p className="font-bold">
+                      {text.orderVerified}: {verifiedOrderId}
+                    </p>
                   </div>
                 )}
                 {status === "escalated" && escalation && (

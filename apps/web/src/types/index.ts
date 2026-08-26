@@ -48,6 +48,7 @@ export interface Conversation {
   locale: Locale;
   status: ConversationStatus;
   detected_order_id: string | null;
+  verified_order_id: string | null;
   created_at: string;
   updated_at: string;
   messages: Message[];
@@ -61,6 +62,9 @@ export interface ChatResponse {
   assistant_message: Message;
   tool_trace_identifiers: string[];
   escalation: Escalation | null;
+  order_verification_required: boolean;
+  order_verified: boolean;
+  order_id: string | null;
 }
 
 export interface DashboardStats {

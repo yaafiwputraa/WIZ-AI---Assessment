@@ -108,6 +108,7 @@ class Order(Base):
     courier: Mapped[str | None] = mapped_column(String(80), nullable=True)
     tracking_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     estimated_delivery: Mapped[date | None] = mapped_column(Date, nullable=True)
+    verification_code_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class FAQ(Base):
@@ -130,6 +131,7 @@ class Conversation(Base):
         ConversationStatus, ConversationStatus.AI_ACTIVE
     )
     detected_order_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    verified_order_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

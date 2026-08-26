@@ -18,6 +18,7 @@ from app.tools import ToolExecutor
 
 AGENT_PASSWORD_HASH = hash_password("DemoAgent123!")
 ADMIN_PASSWORD_HASH = hash_password("DemoAdmin123!")
+ORDER_VERIFICATION_HASH = hash_password("TOKO192")
 
 
 class FakeLLM:
@@ -26,16 +27,31 @@ class FakeLLM:
     def ping(self) -> bool:
         return True
 
-    def respond(self, db, conversation, history, locale):
+    def respond(
+        self,
+        db,
+        conversation,
+        history,
+        locale,
+        order_verification_code=None,
+    ):
         message = history[-1].content.lower()
-        executor = ToolExecutor(db, conversation, locale)
-        if "ord-" in message:
-            execution = executor.execute("check_order_status", {"order_id": "ORD-192"})
-            content = (
-                "Pesanan ORD-192 sudah dikirim dengan JNE. Resi JNE123456, estimasi 26 Agustus 2026."
-                if locale == Locale.ID
-                else "Order ORD-192 has shipped with JNE. Tracking JNE123456, estimated August 26, 2026."
-            )
+        executor = ToolExecutor(db, conversation, locale, order_verification_code)
+        if "ord-" in message or "verification" in message or "verifikasi" in message:
+            order_id = conversation.detected_order_id or "ORD-192"
+            execution = executor.execute("check_order_status", {"order_id": order_id})
+            if execution.result.get("verification_required"):
+                content = (
+                    "Masukkan kode verifikasi pesanan melalui kolom verifikasi untuk melanjutkan."
+                    if locale == Locale.ID
+                    else "Enter the order verification code in the verification field to continue."
+                )
+            else:
+                content = (
+                    "Pesanan ORD-192 sudah dikirim dengan JNE. Resi JNE123456, estimasi 26 Agustus 2026."
+                    if locale == Locale.ID
+                    else "Order ORD-192 has shipped with JNE. Tracking JNE123456, estimated August 26, 2026."
+                )
         elif "samba" in message:
             execution = executor.execute(
                 "check_product_stock",
@@ -113,6 +129,7 @@ def client():
                 courier="JNE",
                 tracking_number="JNE123456",
                 estimated_delivery=date(2026, 8, 26),
+                verification_code_hash=ORDER_VERIFICATION_HASH,
             )
         )
         db.add_all(

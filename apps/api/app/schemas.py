@@ -46,8 +46,9 @@ class ChatRequest(BaseModel):
     customer_name: str | None = Field(default=None, max_length=120)
     locale: Locale = Locale.ID
     message: str = Field(min_length=1, max_length=4000)
+    order_verification_code: str | None = Field(default=None, min_length=4, max_length=40)
 
-    @field_validator("message", "customer_name")
+    @field_validator("message", "customer_name", "order_verification_code")
     @classmethod
     def strip_text(cls, value: str | None) -> str | None:
         return value.strip() if value is not None else value
@@ -86,6 +87,9 @@ class ChatResponse(BaseModel):
     assistant_message: MessageOut
     tool_trace_identifiers: list[str] = Field(default_factory=list)
     escalation: EscalationOut | None = None
+    order_verification_required: bool = False
+    order_verified: bool = False
+    order_id: str | None = None
 
 
 class ConversationOut(BaseModel):
@@ -94,6 +98,7 @@ class ConversationOut(BaseModel):
     locale: Locale
     status: ConversationStatus
     detected_order_id: str | None
+    verified_order_id: str | None
     created_at: datetime
     updated_at: datetime
     messages: list[MessageOut]

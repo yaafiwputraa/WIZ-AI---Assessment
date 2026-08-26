@@ -135,6 +135,19 @@ def _acknowledgement(locale: Any) -> str:
     )
 
 
+def _order_verification_request(locale: Any, order_id: str | None) -> str:
+    reference = f" {order_id}" if order_id else ""
+    if locale.value == "id":
+        return (
+            f"Untuk melindungi detail pesanan{reference}, masukkan kode verifikasi "
+            "melalui kolom verifikasi pesanan."
+        )
+    return (
+        f"To protect the details for order{reference}, enter the verification code "
+        "using the order verification field."
+    )
+
+
 def _conversation_out(conversation: Conversation) -> ConversationOut:
     messages = sorted(conversation.messages, key=lambda item: item.created_at)
     return ConversationOut(
@@ -143,6 +156,7 @@ def _conversation_out(conversation: Conversation) -> ConversationOut:
         locale=conversation.locale,
         status=conversation.status,
         detected_order_id=conversation.detected_order_id,
+        verified_order_id=conversation.verified_order_id,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         messages=[MessageOut.model_validate(item) for item in messages],
@@ -248,7 +262,13 @@ def chat(
 
     history = get_recent_messages(db, conversation.id, limit=30)
     try:
-        result = llm.respond(db, conversation, history, payload.locale)
+        result = llm.respond(
+            db,
+            conversation,
+            history,
+            payload.locale,
+            payload.order_verification_code,
+        )
     except OllamaUnavailable as exc:
         raise APIError(
             503,
@@ -257,11 +277,19 @@ def chat(
             retryable=True,
         ) from exc
 
+    verification_required, order_verified, verification_order_id = _order_verification_state(
+        result.traces
+    )
+    assistant_content = (
+        _order_verification_request(payload.locale, verification_order_id)
+        if verification_required
+        else result.content
+    )
     assistant_message = add_message(
         db,
         conversation.id,
         Sender.ASSISTANT,
-        result.content,
+        assistant_content,
         {"tool_traces": result.traces} if result.traces else None,
     )
     escalation = db.scalar(select(Escalation).where(Escalation.conversation_id == conversation.id))
@@ -281,7 +309,24 @@ def chat(
         assistant_message=MessageOut.model_validate(assistant_message),
         tool_trace_identifiers=[trace["trace_id"] for trace in result.traces],
         escalation=EscalationOut.model_validate(escalation) if escalation else None,
+        order_verification_required=verification_required,
+        order_verified=order_verified,
+        order_id=verification_order_id,
     )
+
+
+def _order_verification_state(traces: list[dict[str, Any]]) -> tuple[bool, bool, str | None]:
+    for trace in reversed(traces):
+        if trace.get("tool") != "check_order_status":
+            continue
+        result = trace.get("result", {})
+        order_id = result.get("order_id") or result.get("order", {}).get("order_id")
+        return (
+            bool(result.get("verification_required")),
+            bool(result.get("verified")),
+            order_id,
+        )
+    return False, False, None
 
 
 @app.get("/api/conversations/{conversation_id}", response_model=ConversationOut)

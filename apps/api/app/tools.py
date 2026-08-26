@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from .auth import verify_password
 from .escalation import enforce_priority
 from .models import Conversation, Locale, Priority
 from .repositories import (
@@ -129,10 +130,17 @@ def product_dict(product: Any) -> dict[str, Any]:
 
 
 class ToolExecutor:
-    def __init__(self, db: Session, conversation: Conversation, locale: Locale):
+    def __init__(
+        self,
+        db: Session,
+        conversation: Conversation,
+        locale: Locale,
+        order_verification_code: str | None = None,
+    ):
         self.db = db
         self.conversation = conversation
         self.locale = locale
+        self.order_verification_code = order_verification_code
 
     def execute(self, name: str, arguments: dict[str, Any]) -> ToolExecution:
         trace_id = str(uuid.uuid4())
@@ -211,9 +219,35 @@ class ToolExecutor:
             order = get_order(self.db, order_id)
             if order is None:
                 return {"ok": True, "found": False, "order_id": order_id}
+            if self.conversation.verified_order_id != order.id:
+                verified = bool(
+                    order.verification_code_hash
+                    and self.order_verification_code
+                    and verify_password(
+                        self.order_verification_code,
+                        order.verification_code_hash,
+                    )
+                )
+                if not verified:
+                    message = (
+                        "Gunakan kolom kode verifikasi pesanan untuk melanjutkan."
+                        if self.locale == Locale.ID
+                        else "Use the order verification code field to continue."
+                    )
+                    return {
+                        "ok": True,
+                        "verified": False,
+                        "verification_required": True,
+                        "order_id": order_id,
+                        "message": message,
+                    }
+                self.conversation.verified_order_id = order.id
+                self.db.commit()
             return {
                 "ok": True,
                 "found": True,
+                "verified": True,
+                "verification_required": False,
                 "order": {
                     "order_id": order.id,
                     "status": order.status,

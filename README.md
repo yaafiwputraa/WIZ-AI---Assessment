@@ -23,6 +23,7 @@ TokoMate AI addresses this with a hybrid approach:
 
 - Bilingual customer chat with an ID/EN language selector.
 - Product discovery, price, stock, order tracking, and store-policy assistance.
+- Order-specific verification before any delivery details are disclosed.
 - Explicit not-found responses when business information cannot be verified.
 - Localized escalation confirmation for sensitive cases.
 - Customer-controlled “Issue resolved” action.
@@ -41,6 +42,7 @@ TokoMate AI addresses this with a hybrid approach:
 - Typed tool arguments and structured results.
 - Maximum of four tool-call rounds using the latest 30 messages.
 - Persisted tool traces showing which source supplied each business fact.
+- Order credentials are hashed and never added to the AI prompt, transcript, or tool trace.
 - Server-side escalation rules and minimum priority enforcement.
 - Failed summary generation is marked as failed instead of inventing content.
 
@@ -63,10 +65,12 @@ Use a fresh conversation for each scenario.
 | Scenario | Customer message | Expected behavior |
 | --- | --- | --- |
 | Product availability | `Adidas Samba hitam size 42 masih ada?` | Calls the stock tool and returns stock `3` at `Rp1.499.000`. |
-| Order tracking | `ORD-192 saya sudah sampai mana?` | Calls the order tool and returns Shipped, JNE, `JNE123456`, and 26 August 2026. |
+| Order tracking | `ORD-192 saya sudah sampai mana?` | Requests the order code, then returns Shipped, JNE, `JNE123456`, and 26 August 2026 only after verification. |
 | Human escalation | `Barang saya datang rusak dan saya sudah komplain dua kali. Saya mau refund.` | Creates a high-priority ticket, generates a summary, and sends it to the support dashboard. |
 
 Equivalent English prompts produce English responses. Unknown products, orders, or policies receive an explicit not-found response rather than invented business information.
+
+The seeded verification code for `ORD-192` is `TOKO192`. It is submitted through a separate protected input and is never stored in the conversation transcript.
 
 ## System architecture
 
@@ -80,13 +84,15 @@ The backend owns authentication, conversation state, database access, business-t
 
 The system checks deterministic escalation rules before normal AI processing. Routine requests use approved business tools to retrieve verified information. Sensitive requests create a ticket immediately and continue through a human-in-the-loop workflow.
 
+Order tracking has an additional server-side gate: the business tool returns no delivery facts until the order-specific credential has been verified for the active conversation.
+
 ## Access control
 
 Customer chat is public for the local demo. Staff dashboard requests require a valid JWT, and every protected action is authorized again by the backend.
 
 | Role | Access |
 | --- | --- |
-| Public customer | Customer chat and conversation resolution |
+| Public customer | Customer chat, order-code verification, and conversation resolution |
 | Agent | Dashboard, escalation list and detail, human takeover |
 | Admin | All agent capabilities plus the direct order diagnostic API |
 
@@ -195,7 +201,7 @@ Latest local verification:
 
 - 19 backend tests passing.
 - 3 frontend unit tests passing.
-- 2 Playwright browser tests passing.
+- 3 Playwright browser tests passing.
 - Ruff, ESLint, Docker Compose validation, and the Next.js production build passing.
 
 Backend checks:
@@ -241,7 +247,7 @@ uv run python scripts/live_smoke.py
 - The web chat represents the customer messaging channel. WhatsApp can be integrated by forwarding inbound webhooks into the same chat orchestration layer.
 - Human takeover changes ownership and disables AI input; agent-to-customer messaging is outside this prototype.
 - Demo JWTs are stored in browser local storage. Production should use SSO or HTTP-only sessions, refresh-token rotation, and account administration.
-- Customer order ownership is not verified in the demo. Production should verify the authenticated customer or an order-specific credential before returning delivery information.
+- The demo uses a hashed order-specific credential and conversation-bound verification. Production should combine this with authenticated customer identity, rate limiting, and one-time or expiring verification codes.
 - AI summaries currently use an in-process background task. Production should use a durable job queue with monitoring and retries.
 - Ollama runs as a single local inference service. Production capacity requires managed inference or a scalable model-serving layer.
 - Public deployment, omnichannel delivery, analytics history, and vector retrieval remain outside the MVP.

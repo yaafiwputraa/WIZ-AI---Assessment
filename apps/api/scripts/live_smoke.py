@@ -8,10 +8,15 @@ import httpx
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 AGENT_EMAIL = os.getenv("DEMO_AGENT_EMAIL", "agent@tokomate.local")
 AGENT_PASSWORD = os.getenv("DEMO_AGENT_PASSWORD", "DemoAgent123!")
+ORDER_VERIFICATION_CODE = os.getenv("DEMO_ORDER_VERIFICATION_CODE", "TOKO192")
 SCENARIOS = [
-    ("id", "Adidas Samba hitam size 42 masih ada?"),
-    ("id", "ORD-192 saya sudah sampai mana?"),
-    ("id", "Barang saya datang rusak dan saya sudah komplain dua kali. Saya mau refund."),
+    ("id", "Adidas Samba hitam size 42 masih ada?", None),
+    ("id", "ORD-192 saya sudah sampai mana?", ORDER_VERIFICATION_CODE),
+    (
+        "id",
+        "Barang saya datang rusak dan saya sudah komplain dua kali. Saya mau refund.",
+        None,
+    ),
 ]
 
 
@@ -23,10 +28,15 @@ def main() -> None:
         )
         login.raise_for_status()
         staff_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
-        for index, (locale, message) in enumerate(SCENARIOS, start=1):
+        for index, (locale, message, verification_code) in enumerate(SCENARIOS, start=1):
             response = client.post(
                 "/api/chat",
-                json={"customer_name": f"Demo {index}", "locale": locale, "message": message},
+                json={
+                    "customer_name": f"Demo {index}",
+                    "locale": locale,
+                    "message": message,
+                    "order_verification_code": verification_code,
+                },
             )
             response.raise_for_status()
             payload = response.json()

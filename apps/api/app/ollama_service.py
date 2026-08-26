@@ -48,6 +48,7 @@ class OllamaService:
         conversation: Conversation,
         history: list[Message],
         locale: Locale,
+        order_verification_code: str | None = None,
     ) -> AgentResult:
         messages: list[dict[str, Any]] = [{"role": "system", "content": _system_prompt(locale)}]
         for item in history:
@@ -56,7 +57,7 @@ class OllamaService:
             elif item.sender == Sender.ASSISTANT:
                 messages.append({"role": "assistant", "content": item.content})
 
-        executor = ToolExecutor(db, conversation, locale)
+        executor = ToolExecutor(db, conversation, locale, order_verification_code)
         traces: list[dict[str, Any]] = []
 
         try:
@@ -143,6 +144,9 @@ Reply only in {language}, using concise and natural customer-service language.
 Rules:
 - Product existence, price, stock, order status, shipping facts, and policy facts MUST come from tools.
 - Never guess or invent business facts. If a tool says found=false, say the information was not found.
+- Never reveal order status, courier, tracking, or delivery facts unless the order tool says verified=true.
+- If the order tool says verification_required=true, direct the customer to the separate order
+  verification field. Never ask them to place the verification code in the normal chat message.
 - Use check_product_stock for stock/variant questions, check_order_status for ORD-* questions,
   search_products for catalog discovery, get_product_price for price, and search_faq for policies.
 - Escalate refunds, damaged products, payment disputes, missing orders, unresolved/repeated complaints,
